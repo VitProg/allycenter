@@ -965,7 +965,7 @@ const PerformanceSection: VFC = () => {
               label={`TDP: ${currentTdp}W`}
               value={currentTdp}
               min={5}
-              max={30}
+              max={35}
               step={1}
               disabled={!tdpOverride}
               showValue={false}

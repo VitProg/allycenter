@@ -1,4 +1,4 @@
-# Ally Center
+# Ally Center (fix for Rog Xbox Ally X)
 
 A comprehensive Decky Loader plugin for the **ASUS ROG Ally** running SteamOS.
 

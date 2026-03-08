@@ -28,33 +28,40 @@ PWM_PATH = "/sys/devices/platform/asus-nb-wmi/hwmon"
 RYZENADJ_PATH = "/usr/bin/ryzenadj"
 ALLY_CONTROLLER_PATH = "/sys/devices/platform/asus-nb-wmi"
 
-# Preset power profiles with sensible defaults for the Z1 Extreme
+# Preset power profiles with sensible defaults for the Z2 Extreme
 PERFORMANCE_PROFILES = {
-    "download": {
+    "download 5W": {
         "name": "Download",
         "tdp": 5,
         "gpu_clock": 800,
         "fan_curve": "quiet",
         "description": "Minimum power for downloads"
     },
-    "silent": {
+    "silent 13W": {
         "name": "Silent",
-        "tdp": 15,
-        "gpu_clock": 1200,
+        "tdp": 13,
+        "gpu_clock": 1300,
         "fan_curve": "quiet",
         "description": "Low power, minimal fan noise"
     },
-    "performance": {
+    "performance 17W": {
         "name": "Performance", 
-        "tdp": 25,
-        "gpu_clock": 2200,
+        "tdp": 17,
+        "gpu_clock": 2300,
         "fan_curve": "balanced",
         "description": "Balanced performance and thermals"
     },
-    "turbo": {
+    "performance 25W": {
+        "name": "Performance",
+        "tdp": 25,
+        "gpu_clock": 2400,
+        "fan_curve": "balanced",
+        "description": "Balanced performance and thermals"
+    },
+    "turbo 35W": {
         "name": "Turbo",
-        "tdp": 30,
-        "gpu_clock": 2700,
+        "tdp": 36,
+        "gpu_clock": 2900,
         "fan_curve": "performance",
         "description": "Maximum performance"
     }
@@ -939,8 +946,8 @@ class Plugin:
     async def get_tdp_settings(self) -> dict:
         return {
             "tdp": self.settings.get("custom_tdp", 15),
-            "min": 5,
-            "max": 30,
+            "min": 4,
+            "max": 35,
             "tdp_override": self.settings.get("tdp_override", False),
             "use_external_tdp": self.settings.get("use_external_tdp", False),
             "available": os.path.exists(RYZENADJ_PATH) or os.path.exists("/sys/devices/platform/asus-nb-wmi")
