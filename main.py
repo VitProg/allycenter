@@ -78,8 +78,6 @@ class Plugin:
     effect_running: bool = False
     resolved_led_path: str = ""
     rgb_write_error_logged: bool = False
-    hhd_cli_bin: str = ""
-    hhd_unavailable_logged: bool = False
     
     async def _main(self):
         """Main entry point for the plugin"""
@@ -284,16 +282,13 @@ class Plugin:
 
     async def get_rgb_state(self) -> dict:
         led_path = self._resolve_led_path()
-        hhd_available = self._is_hhd_rgb_available()
-        backend = "sysfs" if led_path else ("hhd" if hhd_available else "none")
         return {
             "enabled": self.settings.get("rgb_enabled", True),
             "color": self.settings.get("rgb_color", "#FF0000"),
             "brightness": self.settings.get("rgb_brightness", 100),
             "effect": self.settings.get("rgb_effect", "static"),
             "speed": self.settings.get("rgb_speed", 50),
-            "available": bool(led_path or hhd_available),
-            "backend": backend,
+            "available": bool(led_path),
         }
 
     async def set_rgb_color(self, color: str) -> bool:
@@ -403,110 +398,6 @@ class Plugin:
 
         self.resolved_led_path = ""
         return ""
-
-    def _resolve_hhd_cli(self) -> str:
-        """Resolve Handheld Daemon CLI binary used on Bazzite-like systems."""
-        if self.hhd_cli_bin and self._command_exists(self.hhd_cli_bin):
-            return self.hhd_cli_bin
-
-        for candidate in ["hhdctl", "hhd", "handheld-daemon-cli"]:
-            if self._command_exists(candidate):
-                self.hhd_cli_bin = candidate
-                decky.logger.info(f"Using HHD RGB backend: {candidate}")
-                return candidate
-
-        self.hhd_cli_bin = ""
-        return ""
-
-    def _is_hhd_rgb_available(self) -> bool:
-        return bool(self._resolve_hhd_cli())
-
-    def _try_cli_variants(self, variants: list) -> bool:
-        """Try command variants until one succeeds."""
-        for cmd in variants:
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=2,
-                )
-                if result.returncode == 0:
-                    return True
-            except Exception:
-                continue
-        return False
-
-    def _apply_rgb_via_hhd(self) -> bool:
-        """Fallback RGB backend via Handheld Daemon CLI when sysfs LEDs are unavailable."""
-        cli = self._resolve_hhd_cli()
-        if not cli:
-            if not self.hhd_unavailable_logged:
-                decky.logger.warning("No HHD CLI found for RGB fallback (tried hhdctl/hhd)")
-                self.hhd_unavailable_logged = True
-            return False
-
-        self.hhd_unavailable_logged = False
-        enabled = self.settings.get("rgb_enabled", True)
-        effect = self.settings.get("rgb_effect", "static")
-        color = self.settings.get("rgb_color", "#FF0000")
-        brightness = str(max(0, min(100, int(self.settings.get("rgb_brightness", 100)))))
-
-        # Disable path
-        if (not enabled) or effect == "off":
-            return self._try_cli_variants([
-                [cli, "rgb", "disable"],
-                [cli, "rgb", "enable", "0"],
-                [cli, "rgb", "set", "enabled", "0"],
-                [cli, "rgb", "set", "enable", "0"],
-                [cli, "rgb", "off"],
-            ])
-
-        # Enable RGB first.
-        enabled_ok = self._try_cli_variants([
-            [cli, "rgb", "enable"],
-            [cli, "rgb", "enable", "1"],
-            [cli, "rgb", "set", "enabled", "1"],
-            [cli, "rgb", "set", "enable", "1"],
-            [cli, "rgb", "on"],
-        ])
-
-        # Map plugin effects to common HHD naming.
-        effect_candidates = {
-            "static": ["static", "solid"],
-            "pulse": ["pulse", "breathing"],
-            "spectrum": ["spectrum", "rainbow"],
-            "wave": ["wave"],
-            "flash": ["flash", "strobe"],
-            "battery": ["battery"],
-        }.get(effect, [effect])
-
-        mode_ok = False
-        for mode in effect_candidates:
-            if self._try_cli_variants([
-                [cli, "rgb", "mode", mode],
-                [cli, "rgb", "effect", mode],
-                [cli, "rgb", "set", "mode", mode],
-                [cli, "rgb", "set", "effect", mode],
-            ]):
-                mode_ok = True
-                break
-
-        # Color may be unsupported for some effects; still try.
-        color_ok = self._try_cli_variants([
-            [cli, "rgb", "color", color],
-            [cli, "rgb", "set", "color", color],
-        ])
-
-        brightness_ok = self._try_cli_variants([
-            [cli, "rgb", "brightness", brightness],
-            [cli, "rgb", "set", "brightness", brightness],
-        ])
-
-        ok = enabled_ok or mode_ok or color_ok or brightness_ok
-        if not ok:
-            decky.logger.warning("HHD RGB backend available, but RGB command variants failed")
-        return ok
 
     def _stop_effect(self):
         self.effect_running = False
@@ -730,11 +621,8 @@ class Plugin:
         try:
             led_path = self._resolve_led_path()
             if not led_path:
-                # Fallback for distros using Handheld Daemon instead of sysfs LEDs.
-                ok = self._apply_rgb_via_hhd()
-                if not ok:
-                    decky.logger.warning("Ally LED path not found and HHD RGB fallback failed")
-                return ok
+                decky.logger.warning("Ally LED path not found")
+                return False
             
             brightness_path = os.path.join(led_path, "brightness")
             

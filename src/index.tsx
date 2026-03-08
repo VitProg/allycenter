@@ -147,7 +147,6 @@ interface RgbState {
   effect: string;
   speed: number;
   available: boolean;
-  backend?: "sysfs" | "hhd" | "none";
 }
 
 interface PerformanceProfile {
@@ -697,21 +696,13 @@ const RgbLightingSection: VFC = () => {
 
   const currentColor = rgbState?.color || "#FF0000";
   const rgbAvailable = rgbState?.available ?? false;
-  const rgbBackend = rgbState?.backend || "none";
 
   return (
     <PanelSection title="RGB Lighting">
-      {rgbAvailable && rgbBackend === "hhd" && (
-        <PanelSectionRow>
-          <div style={{ color: "#8b929a", fontSize: "12px" }}>
-            RGB backend: Handheld Daemon (HHD)
-          </div>
-        </PanelSectionRow>
-      )}
       {!rgbAvailable && (
         <PanelSectionRow>
           <div style={{ color: "#ff9800", fontSize: "12px" }}>
-            RGB backend not detected (sysfs/HHD unavailable).
+            RGB device not detected in /sys/class/leds.
           </div>
         </PanelSectionRow>
       )}
@@ -1228,7 +1219,7 @@ const AboutModal: VFC<{ closeModal: () => void }> = ({ closeModal }) => {
     >
       <div style={{ textAlign: "center", marginBottom: "12px" }}>
         <div style={{ fontSize: "18px", fontWeight: "bold", color: "#fff" }}>Ally Center</div>
-        <div style={{ fontSize: "12px", color: "#8b929a" }}>Version 1.5.0</div>
+        <div style={{ fontSize: "12px", color: "#8b929a" }}>Version 1.6.0</div>
       </div>
       <div style={{ textAlign: "center" }}>
         <div style={{ color: "#8b929a", fontSize: "11px" }}>Created by</div>
