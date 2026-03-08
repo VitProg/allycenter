@@ -76,6 +76,8 @@ class Plugin:
     screen_off: bool = False
     effect_thread: threading.Thread = None
     effect_running: bool = False
+    resolved_led_path: str = ""
+    rgb_write_error_logged: bool = False
     
     async def _main(self):
         """Main entry point for the plugin"""
@@ -279,21 +281,21 @@ class Plugin:
             return False
 
     async def get_rgb_state(self) -> dict:
+        led_path = self._resolve_led_path()
         return {
             "enabled": self.settings.get("rgb_enabled", True),
             "color": self.settings.get("rgb_color", "#FF0000"),
             "brightness": self.settings.get("rgb_brightness", 100),
             "effect": self.settings.get("rgb_effect", "static"),
             "speed": self.settings.get("rgb_speed", 50),
-            "available": os.path.exists(ALLY_LED_PATH)
+            "available": bool(led_path)
         }
 
     async def set_rgb_color(self, color: str) -> bool:
         try:
             self.settings["rgb_color"] = color
             await self.save_settings()
-            await self._apply_rgb()
-            return True
+            return await self._apply_rgb()
         except Exception as e:
             decky.logger.error(f"Failed to set RGB color: {e}")
             return False
@@ -303,8 +305,7 @@ class Plugin:
             brightness = max(0, min(100, brightness))
             self.settings["rgb_brightness"] = brightness
             await self.save_settings()
-            await self._apply_rgb()
-            return True
+            return await self._apply_rgb()
         except Exception as e:
             decky.logger.error(f"Failed to set RGB brightness: {e}")
             return False
@@ -329,8 +330,7 @@ class Plugin:
             self.settings["rgb_effect"] = effect
             self.settings["rgb_enabled"] = effect != "off"
             await self.save_settings()
-            await self._apply_rgb()
-            return True
+            return await self._apply_rgb()
         except Exception as e:
             decky.logger.error(f"Failed to set RGB effect: {e}")
             return False
@@ -339,10 +339,10 @@ class Plugin:
         try:
             self.settings["rgb_enabled"] = enabled
             await self.save_settings()
-            await self._apply_rgb()
+            rgb_ok = await self._apply_rgb()
             # When RGB is disabled, enable MCU powersave to stop charging LED blink
             await self._set_mcu_powersave(not enabled)
-            return True
+            return rgb_ok
         except Exception as e:
             decky.logger.error(f"Failed to toggle RGB: {e}")
             return False
@@ -367,6 +367,38 @@ class Plugin:
             decky.logger.error(f"Failed to set MCU powersave: {e}")
             return False
 
+    def _resolve_led_path(self) -> str:
+        """Resolve LED sysfs path across Ally / Ally X naming variants."""
+        if self.resolved_led_path and os.path.exists(self.resolved_led_path):
+            return self.resolved_led_path
+
+        candidates = [ALLY_LED_PATH]
+        leds_root = "/sys/class/leds"
+        try:
+            if os.path.exists(leds_root):
+                for name in os.listdir(leds_root):
+                    lower_name = name.lower()
+                    if "joystick" not in lower_name:
+                        continue
+                    if "rgb" not in lower_name and "ally" not in lower_name:
+                        continue
+                    candidate = os.path.join(leds_root, name)
+                    multi_intensity = os.path.join(candidate, "multi_intensity")
+                    brightness = os.path.join(candidate, "brightness")
+                    if os.path.exists(multi_intensity) and os.path.exists(brightness):
+                        candidates.append(candidate)
+        except Exception:
+            pass
+
+        for path in candidates:
+            if os.path.exists(path):
+                self.resolved_led_path = path
+                decky.logger.info(f"Using LED path: {path}")
+                return path
+
+        self.resolved_led_path = ""
+        return ""
+
     def _stop_effect(self):
         self.effect_running = False
         if self.effect_thread and self.effect_thread.is_alive():
@@ -375,41 +407,69 @@ class Plugin:
 
     def _set_led_color(self, r: int, g: int, b: int, brightness: int = 255):
         try:
-            brightness_path = os.path.join(ALLY_LED_PATH, "brightness")
-            multi_intensity_path = os.path.join(ALLY_LED_PATH, "multi_intensity")
+            led_path = self._resolve_led_path()
+            if not led_path:
+                return False
+
+            brightness_path = os.path.join(led_path, "brightness")
+            multi_intensity_path = os.path.join(led_path, "multi_intensity")
             
             color_int = (r << 16) | (g << 8) | b
+            wrote_any = False
             
             if os.path.exists(multi_intensity_path):
                 color_str = f"{color_int} {color_int} {color_int} {color_int}"
                 with open(multi_intensity_path, 'w') as f:
                     f.write(color_str)
+                wrote_any = True
             
             if os.path.exists(brightness_path):
                 with open(brightness_path, 'w') as f:
                     f.write(str(brightness))
+                wrote_any = True
+
+            self.rgb_write_error_logged = False
+            return wrote_any
         except Exception as e:
-            pass  # Silently fail during animations
+            # Avoid spamming logs in animation loops, but keep first error visible.
+            if not self.rgb_write_error_logged:
+                decky.logger.warning(f"RGB write failed: {e}")
+                self.rgb_write_error_logged = True
+            return False
 
     def _set_led_zones(self, colors: list, brightness: int = 255):
         try:
-            brightness_path = os.path.join(ALLY_LED_PATH, "brightness")
-            multi_intensity_path = os.path.join(ALLY_LED_PATH, "multi_intensity")
+            led_path = self._resolve_led_path()
+            if not led_path:
+                return False
+
+            brightness_path = os.path.join(led_path, "brightness")
+            multi_intensity_path = os.path.join(led_path, "multi_intensity")
             
             color_ints = []
             for r, g, b in colors:
                 color_ints.append((r << 16) | (g << 8) | b)
+
+            wrote_any = False
             
             if os.path.exists(multi_intensity_path):
                 color_str = " ".join(str(c) for c in color_ints)
                 with open(multi_intensity_path, 'w') as f:
                     f.write(color_str)
+                wrote_any = True
             
             if os.path.exists(brightness_path):
                 with open(brightness_path, 'w') as f:
                     f.write(str(brightness))
+                wrote_any = True
+
+            self.rgb_write_error_logged = False
+            return wrote_any
         except Exception as e:
-            pass
+            if not self.rgb_write_error_logged:
+                decky.logger.warning(f"RGB zone write failed: {e}")
+                self.rgb_write_error_logged = True
+            return False
 
     def _get_effect_delay(self) -> float:
         """Calculate delay based on speed setting (10-100). Higher speed = shorter delay."""
@@ -557,13 +617,14 @@ class Plugin:
             self.effect_thread.start()
             decky.logger.info(f"Started effect: {effect}")
 
-    async def _apply_rgb(self):
+    async def _apply_rgb(self) -> bool:
         try:
-            if not os.path.exists(ALLY_LED_PATH):
+            led_path = self._resolve_led_path()
+            if not led_path:
                 decky.logger.warning("Ally LED path not found")
-                return
+                return False
             
-            brightness_path = os.path.join(ALLY_LED_PATH, "brightness")
+            brightness_path = os.path.join(led_path, "brightness")
             
             if not self.settings.get("rgb_enabled", True):
                 # Turn off RGB
@@ -572,7 +633,7 @@ class Plugin:
                     with open(brightness_path, 'w') as f:
                         f.write("0")
                 decky.logger.info("RGB disabled")
-                return
+                return True
             
             effect = self.settings.get("rgb_effect", "static")
             
@@ -581,7 +642,7 @@ class Plugin:
                 if os.path.exists(brightness_path):
                     with open(brightness_path, 'w') as f:
                         f.write("0")
-                return
+                return True
             
             if effect == "static":
                 # Static color - no animation
@@ -594,14 +655,18 @@ class Plugin:
                 b = int(color[4:6], 16)
                 hw_brightness = int(brightness * 255 / 100)
                 
-                self._set_led_color(r, g, b, hw_brightness)
-                decky.logger.info(f"Set static RGB: #{color} @ {brightness}%")
+                ok = self._set_led_color(r, g, b, hw_brightness)
+                if ok:
+                    decky.logger.info(f"Set static RGB: #{color} @ {brightness}%")
+                return ok
             else:
                 # Start animated effect
                 self._start_effect(effect)
+                return True
                     
         except Exception as e:
             decky.logger.error(f"Failed to apply RGB settings: {e}")
+            return False
 
     def _command_exists(self, cmd: str) -> bool:
         return subprocess.run(

@@ -695,13 +695,22 @@ const RgbLightingSection: VFC = () => {
   }
 
   const currentColor = rgbState?.color || "#FF0000";
+  const rgbAvailable = rgbState?.available ?? false;
 
   return (
     <PanelSection title="RGB Lighting">
+      {!rgbAvailable && (
+        <PanelSectionRow>
+          <div style={{ color: "#ff9800", fontSize: "12px" }}>
+            RGB device not detected in /sys/class/leds. Check asus-wmi/LED driver support.
+          </div>
+        </PanelSectionRow>
+      )}
       <PanelSectionRow>
         <ToggleField
           label="Enable RGB"
           checked={rgbState?.enabled ?? false}
+          disabled={!rgbAvailable}
           onChange={handleToggle}
         />
       </PanelSectionRow>
