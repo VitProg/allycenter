@@ -147,6 +147,7 @@ interface RgbState {
   effect: string;
   speed: number;
   available: boolean;
+  backend?: "sysfs" | "hhd" | "none";
 }
 
 interface PerformanceProfile {
@@ -696,13 +697,21 @@ const RgbLightingSection: VFC = () => {
 
   const currentColor = rgbState?.color || "#FF0000";
   const rgbAvailable = rgbState?.available ?? false;
+  const rgbBackend = rgbState?.backend || "none";
 
   return (
     <PanelSection title="RGB Lighting">
+      {rgbAvailable && rgbBackend === "hhd" && (
+        <PanelSectionRow>
+          <div style={{ color: "#8b929a", fontSize: "12px" }}>
+            RGB backend: Handheld Daemon (HHD)
+          </div>
+        </PanelSectionRow>
+      )}
       {!rgbAvailable && (
         <PanelSectionRow>
           <div style={{ color: "#ff9800", fontSize: "12px" }}>
-            RGB device not detected in /sys/class/leds. Check asus-wmi/LED driver support.
+            RGB backend not detected (sysfs/HHD unavailable).
           </div>
         </PanelSectionRow>
       )}
