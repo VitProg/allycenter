@@ -27,6 +27,8 @@ FAN_CURVE_PATH = "/sys/devices/platform/asus-nb-wmi/fan_curve_enable"
 PWM_PATH = "/sys/devices/platform/asus-nb-wmi/hwmon"
 RYZENADJ_PATH = "/usr/bin/ryzenadj"
 ALLY_CONTROLLER_PATH = "/sys/devices/platform/asus-nb-wmi"
+TDP_MIN_WATTS = 5
+TDP_MAX_WATTS = 35
 
 # Preset power profiles with sensible defaults for the Z2 Extreme
 PERFORMANCE_PROFILES = {
@@ -60,7 +62,7 @@ PERFORMANCE_PROFILES = {
     },
     "turbo 35W": {
         "name": "Turbo",
-        "tdp": 36,
+        "tdp": 35,
         "gpu_clock": 2900,
         "fan_curve": "performance",
         "description": "Maximum performance"
@@ -946,8 +948,8 @@ class Plugin:
     async def get_tdp_settings(self) -> dict:
         return {
             "tdp": self.settings.get("custom_tdp", 15),
-            "min": 4,
-            "max": 35,
+            "min": TDP_MIN_WATTS,
+            "max": TDP_MAX_WATTS,
             "tdp_override": self.settings.get("tdp_override", False),
             "use_external_tdp": self.settings.get("use_external_tdp", False),
             "available": os.path.exists(RYZENADJ_PATH) or os.path.exists("/sys/devices/platform/asus-nb-wmi")
@@ -966,7 +968,7 @@ class Plugin:
 
     async def set_tdp(self, tdp: int) -> bool:
         try:
-            tdp = max(5, min(30, tdp))
+            tdp = max(TDP_MIN_WATTS, min(TDP_MAX_WATTS, tdp))
             self.settings["custom_tdp"] = tdp
             await self.save_settings()
             
