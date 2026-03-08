@@ -3,9 +3,9 @@
 # Author: Keith Baker (Pixel Addict Games)
 set -e
 
-PLUGIN_NAME="Ally Center"
+PLUGIN_NAME="ROG Xbox Ally X Center"
 PLUGIN_DIR="$HOME/homebrew/plugins/$PLUGIN_NAME"
-REPO_OWNER="PixelAddictUnlocked"
+REPO_OWNER="VitProg"
 REPO_NAME="allycenter"
 
 # Trap to ensure cleanup on exit
@@ -21,7 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "================================"
-echo "  Ally Center Installer"
+echo "  ROG Xbox Ally X Center Installer"
 echo "  by Pixel Addict Games"
 echo "================================"
 echo ""

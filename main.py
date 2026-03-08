@@ -1,8 +1,8 @@
 """
-Ally Center - Decky Loader Plugin Backend
-ROG Ally hardware control and system management
+ROG Xbox Ally X Center - Decky Loader Plugin Backend
+ROG Xbox Ally X hardware control and system management
 
-2025 Keith Baker / Pixel Addict Games
+2026 Keith Baker / Pixel Addict Games / VikBite
 Licensed under MIT
 """
 
@@ -79,7 +79,7 @@ class Plugin:
         """Main entry point for the plugin"""
         self.settings_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
         await self.load_settings()
-        decky.logger.info("Ally Center initialized")
+        decky.logger.info("ROG Xbox Ally X Center initialized")
 
     async def _unload(self):
         """Cleanup when plugin is unloaded"""
@@ -88,7 +88,7 @@ class Plugin:
         # Restore screen if it was off
         if self.screen_off:
             await self.set_screen_state(True)
-        decky.logger.info("Ally Center unloaded")
+        decky.logger.info("ROG Xbox Ally X Center unloaded")
 
     async def _migration(self):
         """Handle plugin migrations"""
